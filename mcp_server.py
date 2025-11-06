@@ -1,5 +1,6 @@
 from mcp.server.fastmcp import FastMCP
 from pydantic import Field
+from mcp.server.fastmcp.prompts import base
 
 mcp = FastMCP("DocumentMCP", log_level="ERROR")
 
@@ -43,10 +44,21 @@ def edit_document(
     description="returns a list of all document ids"
 )
 def get_all_ids():
-    return docs.keys
+    return sorted(docs.keys())
+
 
 @mcp.resource(
-    "resource://docs/{doc_id}",
+    "docs://documents",
+    name="Document IDs",
+    description="List all available document IDs.",
+    mime_type="application/json",
+)
+def list_documents() -> list[str]:
+    return sorted(docs.keys())
+
+
+@mcp.resource(
+    "docs://documents/{doc_id}",
     name="Document Contents",
     description="Returns the contents of a document by ID.",
     mime_type="text/plain",
@@ -58,36 +70,30 @@ def document_resource(
         raise ValueError(f"Document with ID '{doc_id}' not found.")
     return docs[doc_id]
 
-@mcp.prompt(
-    name="rewrite_doc_markdown",
-    description="Rewrite the contents of a document in well-structured Markdown format.",
-)
-def rewrite_doc_markdown(
-    doc_id: str = Field(description="The ID of the document whose content should be rewritten in Markdown."),
-):
-    if doc_id not in docs:
-        raise ValueError(f"Document with ID '{doc_id}' not found.")
 
-    content = docs[doc_id]
+@mcp.prompt(
+    name="format",
+    description="Rewrites the contents of the document in Markdown format."
+)
+def format_document(
+    doc_id: str = Field(description="Id of the document to format")
+) -> list[base.Message]:
+    prompt = f"""
+Your goal is to reformat a document to be written with markdown syntax.
+
+The id of the document you need to reformat is:
+<document_id>
+{doc_id}
+</document_id>
+
+Add in headers, bullet points, tables, etc as necessary. Feel free to add in structure.
+Use the 'edit_document' tool to edit the document. After the document has been reformatted...
+"""
+    
     return [
-        {
-            "role": "system",
-            "content": (
-                "You are an expert technical writer. Rewrite the provided document so it is clear, "
-                "concise, and formatted as Markdown. Preserve all factual details and organize the "
-                "content with appropriate headings, lists, and tables when they improve readability."
-            ),
-        },
-        {
-            "role": "user",
-            "content": (
-                f"Rewrite the following document in Markdown. Use the document ID as the top-level heading "
-                f"when helpful.\n\n"
-                f"Document ID: {doc_id}\n"
-                f"Content:\n{content}"
-            ),
-        },
+        base.UserMessage(prompt)
     ]
+    
 
 
 @mcp.prompt(
@@ -98,29 +104,28 @@ def summarize_doc(
     doc_id: str = Field(
         description="The ID of the document whose content should be summarized."
     ),
-):
+) -> list[base.Message]:
     if doc_id not in docs:
         raise ValueError(f"Document with ID '{doc_id}' not found.")
 
     content = docs[doc_id]
     return [
-        {
-            "role": "system",
-            "content": (
+        base.UserMessage(content=(
+            "You are a precise analyst. Read the provided document and return a concise summary that "
+            "captures the main objective, critical details, and any notable risks or open questions. "
+            "Use neutral tone and be brief."
+        )),
+        base.UserMessage(content=(
+            f"Summarize the following document. Highlight the primary purpose, key points, and any "
+            f"important follow-up items.\n\n"
+            f"Document ID: {doc_id}\n"
+            f"Content:\n{content}\n"
+            f"Follow up items:"
                 "You are a precise analyst. Read the provided document and return a concise summary that "
                 "captures the main objective, critical details, and any notable risks or open questions. "
                 "Use neutral tone and be brief."
             ),
-        },
-        {
-            "role": "user",
-            "content": (
-                f"Summarize the following document. Highlight the primary purpose, key points, and any "
-                f"important follow-up items.\n\n"
-                f"Document ID: {doc_id}\n"
-                f"Content:\n{content}"
-            ),
-        },
+        ),
     ]
 
 
