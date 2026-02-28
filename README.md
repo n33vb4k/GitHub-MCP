@@ -20,7 +20,7 @@ ANTHROPIC_API_KEY=""  # Enter your Anthropic API secret key
 ### Step 2: Install dependencies
 
 #### Option 1: Setup with uv (Recommended)
-
+TEST
 [uv](https://github.com/astral-sh/uv) is a fast Python package installer and resolver.
 
 1. Install uv, if not already installed:
